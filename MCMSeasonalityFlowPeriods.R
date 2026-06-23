@@ -9,14 +9,15 @@ file = drive_get(as_id(link))
 
 drive_download(file$drive_resource,  overwrite=T)
 
+setwd("/Users/keirajohnson/Library/CloudStorage/Box-Box/Keira_Johnson/SiSyn/MCMSeasonality")
+
 daily_results<-read.csv("Full_Results_WRTDS_kalman_daily.csv")
 
 #subset to Si and columns of interest
-daily_results<-subset(daily_results, daily_results$chemical=="DSi")
-daily_results<-daily_results[,c("LTER", "Stream_Name", "Date", "Month", "waterYear", "ConcDay", "Q")]
-
-#only keep MCM streams - should be 12
-daily_results_MCM<-subset(daily_results, daily_results$LTER=="MCM")
+daily_results<-daily_results %>%
+  filter(chemical=="DSi") %>%
+  filter(LTER=="MCM") %>%
+  select(LTER, Stream_Name, Date, Month, waterYear, ConcDay, Q)
 
 daily_results_MCM<-subset(daily_results_MCM, daily_results_MCM$Month %in% c(12,1))
 

@@ -1,6 +1,6 @@
 ###MCM Biomass
 
-setwd("/Users/keirajohnson/Box Sync/Keira_Johnson/SiSyn/MCMSeasonality")
+setwd("/Users/keirajohnson/Library/CloudStorage/Box-Box/Keira_Johnson/SiSyn/MCMSeasonality")
 
 biomass<-read.csv("STREAMS_MICROBIAL_BIOMASS_3.csv")
 
