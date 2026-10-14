@@ -1,4 +1,5 @@
 library(zoo)
+library(dplyr)
 
 setwd("C:/Users/johnkeir/Box/Keira_Johnson/SiSyn/MCMSeasonality")
 
@@ -19,11 +20,22 @@ daily_results<-daily_results %>%
   filter(LTER=="MCM") %>%
   select(LTER, Stream_Name, Date, Month, waterYear, ConcDay, Q)
 
+#subset to Si and columns of interest
+daily_results<-daily_results %>%
+  filter(chemical=="DSi") %>%
+  filter(LTER=="MCM") %>%
+  select(LTER, Stream_Name, Date, Month, waterYear, GenConc, Q)
+
+daily_results_MCM<-read.csv("wrtds_kalman_daily_mcm.csv")
+
 daily_results_MCM<-subset(daily_results_MCM, daily_results_MCM$Month %in% c(12,1))
+
+daily_results_MCM <- daily_results_MCM %>%
+  mutate(waterYear=get_waterYear(Date))
 
 daily_results_avg<-daily_results_MCM %>%
   group_by(Stream_Name) %>%
-  summarise(mean_si=mean(ConcDay))
+  summarise(mean_si=mean(GenConc_mgL))
 
 #make list of streams in MCM LTER
 stream_list<-unique(daily_results_MCM$Stream_Name)
@@ -43,7 +55,7 @@ for (i in 1:length(stream_list)) {
   one_stream<-subset(daily_results_MCM, daily_results_MCM$Stream_Name==stream_list[i])
   
   #remove all NA
-  one_stream<-one_stream[complete.cases(one_stream$ConcDay),]
+  one_stream<-one_stream[complete.cases(one_stream$GenConc_mgL),]
   
   #pull out water years
   WY_list<-unique(one_stream$waterYear)
@@ -63,9 +75,9 @@ for (i in 1:length(stream_list)) {
     one_year_stream <-subset(one_stream, one_stream$waterYear==WY_list[k])
     
     #rolling average
-    mov_avg_Si<- rollmean(one_year_stream$ConcDay, k=5)
+    mov_avg_Si<- rollmean(one_year_stream$GenConc_mgL, k=5)
     
-    mov_avg_Q<- rollmean(one_year_stream$Q, k=5)
+    mov_avg_Q<- rollmean(one_year_stream$Discharge_cms, k=5)
     
     #append NA to front, values dont exist until "k", in this case 5
     mov_avg_Si<-c(NA, NA, NA, NA, mov_avg_Si)
@@ -108,7 +120,7 @@ for (i in 1:length(stream_list)) {
   names(onestream_df)<-c("Period", WY_length[[i]])
   
   #melt
-  stream_melt<-melt(onestream_df, id.vars ="Period", value.name="ConcDay")
+  stream_melt<-melt(onestream_df, id.vars ="Period", value.name="GenConc_mgL")
   
   #add column for stream name
   stream_melt$stream<-stream_list[i]
@@ -158,12 +170,15 @@ MCM_allstreams<-merge(MCM_allstreams_Si, MCM_allstreams_Q, by=c("Period","variab
 ID=seq(1,12,1)
 
 #check
-ggplot(MCM_allstreams, aes(Period, ConcDay))+
+ggplot(MCM_allstreams, aes(Period, GenConc_mgL))+
   geom_line(aes(col=variable))+facet_wrap(~stream, scales = "free")+theme_classic()+
   scale_x_continuous(breaks = ID)+theme(legend.position = "null")+
   labs(y="Si Concentration")
 
 write.csv(MCM_allstreams, "MCM_Interpolation.csv")
+
+MCM_allstreams<-read.csv("MCM_Interpolation.csv")
+MCM_allstreams<-MCM_allstreams[,-1]
 
 MCM_allstreams<-MCM_allstreams %>%
   dplyr::group_by(stream) %>%
@@ -176,12 +191,36 @@ mcm_years<-mcm %>%
 MCM_allstreams$min_Q_10<-MCM_allstreams$min_Q*1.1
 
 MCM_allstreams<-MCM_allstreams %>%
-  mutate(conc_clean=case_when(Q > min_Q_10 ~ ConcDay,
+  mutate(conc_clean=case_when(Q > min_Q_10 ~ GenConc_mgL,
                               .default=NA))
 
 MCM_allstreams$Q_min_Q<-ifelse(MCM_allstreams$Q > MCM_allstreams$min_Q_10, "no", "yes")
 
-write.csv(MCM_allstreams, "MCM_FlowPeriods_Cleaned.csv")
+p1<-MCM_allstreams %>%
+  filter(stream %like% "Von Guerard") %>%
+  filter(!is.na(Q_min_Q)) %>%
+  ggplot(aes(as.numeric(Period), Q))+geom_point(aes(col=Q_min_Q))+facet_wrap(~variable)+
+  theme_classic()+geom_line(lty="dashed")+
+  labs(x="Flow Period", y="Q", col="Below Q10")+
+  theme(text = element_text(size = 15))+
+  ggtitle("Discharge across flow periods")
+
+p2<-MCM_allstreams %>%
+  filter(stream %like% "Von Guerard") %>%
+  filter(!is.na(Q_min_Q)) %>%
+  ggplot(aes(as.numeric(Period), GenConc_mgL))+geom_point(aes(col=Q_min_Q))+facet_wrap(~variable)+
+  theme_classic()+geom_line(lty="dashed")+
+  labs(x="Flow Period", y="DSi (mg Si/L)", col="Below Q10")+
+  theme(text = element_text(size = 15))+
+  ggtitle("DSi across flow periods")
+
+pdf("VonGuerard_FlowPeriod.pdf", width = 13, height = 16)
+
+ggarrange(p1, p2, nrow = 2)
+
+dev.off()
+
+write.csv(MCM_allstreams, "MCM_FlowPeriods_Cleaned_GenConc.csv")
 
 #mcm_remove<-c("Andersen Creek at H1","Onyx River at Lake Vanda Weir","Onyx River at Lower Wright Weir", "Lawson Creek at B3")
 
